@@ -270,6 +270,27 @@ app.put(
   }
 );
 
+app.get("/plants/:id", verifyToken, async (req, res) => {
+  try {
+    const plantRef = db.collection("plants").doc(req.params.id);
+    const doc = await plantRef.get();
+
+    if (!doc.exists) {
+      return res.status(404).json({ error: "Roślina nie znaleziona" });
+    }
+
+    const plantData = doc.data();
+    if (plantData.userId !== req.userId) {
+      return res.status(403).json({ error: "Brak dostępu" });
+    }
+
+    res.json({ id: doc.id, ...plantData });
+  } catch (error) {
+    console.error("Błąd pobierania rośliny:", error);
+    res.status(500).json({ error: "Błąd serwera" });
+  }
+});
+
 app.delete("/plants/:id", verifyToken, async (req, res) => {
   try {
     const plantRef = db.collection("plants").doc(req.params.id);
