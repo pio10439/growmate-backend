@@ -340,34 +340,66 @@ app.get("/weather/:lat/:lng", weatherLimiter, async (req, res) => {
 
 app.get("/funfact", async (req, res) => {
   try {
-    const randomPage = Math.floor(Math.random() * 10) + 1;
-    const response = await axios.get(
-      `https://perenual.com/api/v2/species-list?key=${process.env.PERENUAL_API_KEY}&page=${randomPage}`
+    const randomPage = Math.floor(Math.random() * 50) + 1;
+    const listResponse = await axios.get(
+      `https://perenual.com/api/species-list?key=${process.env.PERENUAL_API_KEY}&page=${randomPage}`
     );
 
-    const plants = response.data.data;
-    if (plants.length === 0) {
-      return res.json({
-        fact: "Nie udało się pobrać ciekawostki. Spróbuj później!",
-      });
+    const plants = listResponse.data.data;
+    if (!plants || plants.length === 0) {
+      throw new Error("Brak roślin na stronie");
     }
 
     const randomPlant = plants[Math.floor(Math.random() * plants.length)];
+    const plantId = randomPlant.id;
 
-    const fact = `Ciekawostka o roślinie "${
-      randomPlant.common_name
-    }": Przyciąga ${randomPlant.attracts?.join(", ") || "różne owady"} i jest ${
-      randomPlant.drought_tolerant ? "odporna na suszę" : "wrażliwa na suszę"
-    }. Wymaga podlewania: ${
-      randomPlant.watering
-    }. ${randomPlant.description?.substring(0, 100)}...`;
+    const detailsResponse = await axios.get(
+      `https://perenual.com/api/species/details/${plantId}?key=${process.env.PERENUAL_API_KEY}`
+    );
 
-    res.json({ fact });
+    const details = detailsResponse.data;
+
+    const result = {
+      id: details.id,
+      commonName: details.common_name || "Nieznana roślina",
+      scientificName:
+        details.scientific_name?.[0] ||
+        details.common_name ||
+        "Brak nazwy naukowej",
+      description:
+        details.description || "Piękna roślina doniczkowa, idealna do wnętrz.",
+      cycle: details.cycle || "Nieznany",
+      watering: details.watering || "Umiarkowane",
+      sunlight: details.sunlight?.join(", ") || "Jasne, rozproszone",
+      origin: details.origin?.join(", ") || "Nieznane pochodzenie",
+      indoor: details.indoor ? "Tak" : "Nie",
+      careLevel: details.care_level || "Średni",
+      imageUrl:
+        details.default_image?.original_url ||
+        details.default_image?.regular_url ||
+        "https://via.placeholder.com/600x800?text=Roślina",
+      thumbnailUrl:
+        details.default_image?.thumbnail || details.default_image?.medium_url,
+    };
+
+    res.json(result);
   } catch (error) {
-    console.error("Błąd pobierania ciekawostki:", error.message);
-    res
-      .status(500)
-      .json({ fact: "Błąd podczas pobierania ciekawostki z API." });
+    console.error("Błąd Perenual API:", error.message);
+    res.json({
+      id: 999,
+      commonName: "Monstera deliciosa",
+      scientificName: "Monstera deliciosa",
+      description:
+        "Ikona roślin domowych! Jej charakterystyczne dziury w liściach powstają naturalnie, gdy roślina dojrzewa. Oczyszcza powietrze i dodaje tropikalnego klimatu do każdego wnętrza.",
+      cycle: "Wieloletnia",
+      watering: "Umiarkowane",
+      sunlight: "Jasne, rozproszone",
+      origin: "Ameryka Środkowa i Południowa",
+      indoor: "Tak",
+      careLevel: "Łatwy",
+      imageUrl:
+        "https://perenual.com/storage/species_image/1_monstera_deliciosa/large.jpg",
+    });
   }
 });
 
