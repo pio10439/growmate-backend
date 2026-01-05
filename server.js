@@ -388,7 +388,9 @@ const FALLBACK_PLANT = {
 };
 app.get("/funfact", async (req, res) => {
   try {
-    if (cachedPlant && Date.now() - cacheTimestamp < CACHE_TTL) {
+    const force = req.query.force === "true";
+
+    if (!force && cachedPlant && Date.now() - cacheTimestamp < CACHE_TTL) {
       return res.json(cachedPlant);
     }
 
@@ -483,7 +485,7 @@ Zwróć TYLKO czysty JSON (bez komentarzy, bez markdown):
 
     res.json(result);
   } catch (error) {
-    console.error("❌ /funfact błąd:", error.message);
+    console.error("Funfact błąd:", error.message);
     res.json(FALLBACK_PLANT);
   }
 });
