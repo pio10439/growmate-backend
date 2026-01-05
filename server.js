@@ -12,8 +12,7 @@ const { ipKeyGenerator } = require("express-rate-limit");
 const app = express();
 const upload = multer({ dest: "uploads/" });
 
-const { GoogleGenerativeAI } = require("@google/generative-ai");
-const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+const OpenAI = require("openai");
 
 app.use(cors());
 app.use(express.json());
@@ -362,23 +361,14 @@ app.get("/weather/:lat/:lng", weatherLimiter, async (req, res) => {
   }
 });
 
-const model = genAI.getGenerativeModel({
-  model: "gemini-1.5-flash",
-  generationConfig: {
-    responseMimeType: "application/json",
-    temperature: 0.5,
-    maxOutputTokens: 220,
-  },
+const openai = new OpenAI({
+  baseURL: "https://openrouter.ai/api/v1",
+  apiKey: process.env.OPENROUTER_API_KEY,
 });
 
 let cachedPlant = null;
 let cacheTimestamp = 0;
 const CACHE_TTL = 1000 * 60 * 60 * 6;
-
-const safeEnum = (value, allowed, fallback) =>
-  typeof value === "string" && allowed.includes(value.toUpperCase())
-    ? value.toUpperCase()
-    : fallback;
 
 const FALLBACK_PLANT = {
   id: 1,
@@ -402,7 +392,7 @@ app.get("/funfact", async (req, res) => {
       return res.json(cachedPlant);
     }
 
-    const randomPage = Math.floor(Math.random() * 40) + 1;
+    const randomPage = Math.floor(Math.random() * 10) + 1;
     const listRes = await axios.get("https://perenual.com/api/species-list", {
       params: {
         key: process.env.PERENUAL_API_KEY,
@@ -437,18 +427,22 @@ Zwróć TYLKO czysty JSON (bez komentarzy, bez markdown):
   "dlaczego": "krótka fraza: dlaczego warto ją mieć w domu"
 }`;
 
-    const aiResponse = await model.generateContent(prompt);
-    let aiData;
+    const completion = await openai.chat.completions.create({
+      model: "google/gemini-2.0-flash-exp:free",
+      messages: [
+        {
+          role: "user",
+          content: [{ type: "text", text: prompt }],
+        },
+      ],
+    });
 
+    let aiData = {};
     try {
-      const text = aiResponse.response.text().trim();
+      const text = completion.choices[0].message.content[0].text.trim();
       aiData = JSON.parse(text);
     } catch (parseError) {
-      console.error(
-        "Błąd parsowania JSON z Gemini:",
-        aiResponse.response.text()
-      );
-      aiData = {};
+      console.error("Błąd parsowania JSON z Gemini:", parseError);
     }
 
     const imageUrl =
