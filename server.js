@@ -430,7 +430,7 @@ Zwróć TYLKO czysty JSON (bez komentarzy, bez markdown):
 }`;
 
     const completion = await openai.chat.completions.create({
-      model: "google/gemini-2.0-flash-exp:free",
+      model: "mistralai/devstral-2512:free",
       messages: [
         {
           role: "user",
