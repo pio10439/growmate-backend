@@ -322,6 +322,9 @@ app.post("/plants/:id/water", verifyToken, async (req, res) => {
       return res.status(404).json({ error: "Roślina nie znaleziona" });
     }
     await plantRef.update({
+      wateringHistory: admin.firestore.FieldValue.arrayUnion(
+        admin.firestore.FieldValue.serverTimestamp()
+      ),
       lastWatered: admin.firestore.FieldValue.serverTimestamp(),
     });
     res.json({ success: true });
@@ -384,7 +387,7 @@ const FALLBACK_PLANT = {
   specialFeature: "oczyszczająca",
   why: "idealna na start przygody z roślinami",
   imageUrl:
-    "https://perenual.com/storage/species_image/1_monstera_deliciosa/large.jpg",
+    "https://upload.wikimedia.org/wikipedia/commons/thumb/2/2e/Monstera_deliciosa2.jpg/1280px-Monstera_deliciosa2.jpg",
 };
 app.get("/funfact", async (req, res) => {
   try {
