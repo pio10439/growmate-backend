@@ -12,6 +12,9 @@ const { ipKeyGenerator } = require("express-rate-limit");
 const app = express();
 const upload = multer({ dest: "uploads/" });
 
+const { GoogleGenerativeAI } = require("@google/generative-ai");
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
+
 app.use(cors());
 app.use(express.json());
 
@@ -359,68 +362,142 @@ app.get("/weather/:lat/:lng", weatherLimiter, async (req, res) => {
   }
 });
 
+const model = genAI.getGenerativeModel({
+  model: "gemini-1.5-flash",
+  generationConfig: {
+    responseMimeType: "application/json",
+    temperature: 0.5,
+    maxOutputTokens: 220,
+  },
+});
+
+let cachedPlant = null;
+let cacheTimestamp = 0;
+const CACHE_TTL = 1000 * 60 * 60 * 6;
+
+const safeEnum = (value, allowed, fallback) =>
+  typeof value === "string" && allowed.includes(value.toUpperCase())
+    ? value.toUpperCase()
+    : fallback;
+
+const FALLBACK_PLANT = {
+  id: 1,
+  commonName: "Monstera deliciosa",
+  scientificName: "Monstera deliciosa",
+  description:
+    "Ikona roślin domowych. Jej ogromne, perforowane liście nadają wnętrzom tropikalnego charakteru. Jest odporna, łatwa w pielęgnacji i idealna dla początkujących.",
+  watering: "UMIARKOWANE",
+  sunlight: "PÓŁCIEŃ",
+  origin: "Ameryka Środkowa",
+  indoor: "TAK",
+  careLevel: "ŁATWY",
+  specialFeature: "oczyszczająca",
+  why: "idealna na start przygody z roślinami",
+  imageUrl:
+    "https://perenual.com/storage/species_image/1_monstera_deliciosa/large.jpg",
+};
+
 app.get("/funfact", async (req, res) => {
   try {
-    const randomPage = Math.floor(Math.random() * 50) + 1;
-    const listResponse = await axios.get(
-      `https://perenual.com/api/species-list?key=${process.env.PERENUAL_API_KEY}&page=${randomPage}`
-    );
-
-    const plants = listResponse.data.data;
-    if (!plants || plants.length === 0) {
-      throw new Error("Brak roślin na stronie");
+    if (cachedPlant && Date.now() - cacheTimestamp < CACHE_TTL) {
+      return res.json(cachedPlant);
     }
 
+    const randomPage = Math.floor(Math.random() * 40) + 1;
+    const listRes = await axios.get("https://perenual.com/api/species-list", {
+      params: {
+        key: process.env.PERENUAL_API_KEY,
+        page: randomPage,
+        indoor: 1,
+      },
+      timeout: 10000,
+    });
+
+    const plants = listRes.data?.data;
+    if (!plants || plants.length === 0)
+      throw new Error("Brak roślin na stronie");
+
     const randomPlant = plants[Math.floor(Math.random() * plants.length)];
-    const plantId = randomPlant.id;
 
-    const detailsResponse = await axios.get(
-      `https://perenual.com/api/species/details/${plantId}?key=${process.env.PERENUAL_API_KEY}`
+    const detailsRes = await axios.get(
+      `https://perenual.com/api/species/details/${randomPlant.id}`,
+      {
+        params: { key: process.env.PERENUAL_API_KEY },
+        timeout: 10000,
+      }
     );
+    const d = detailsRes.data;
 
-    const details = detailsResponse.data;
+    const prompt = `Jesteś polskim ekspertem od roślin doniczkowych.
+
+Roślina:
+- nazwa angielska: "${d.common_name || "nieznana"}"
+- nazwa łacińska: "${d.scientific_name?.[0] || "nieznana"}"
+
+Zwróć TYLKO czysty JSON (bez komentarzy, bez markdown):
+
+{
+  "opis": "2-3 zdania po polsku: przyjazny, ekspercki, angażujący ton",
+  "podlewanie": "BARDZO_RZADKIE | RZADKIE | UMIARKOWANE | CZĘSTE",
+  "swiatlo": "CIEŃ | PÓŁCIEŃ | ROZPROSZONE | JASNE | PEŁNE_SŁOŃCE",
+  "pochodzenie": "region lub kontynent",
+  "poziom_opieki": "BARDZO_ŁATWY | ŁATWY | ŚREDNI | TRUDNY",
+  "cecha_specjalna": "jedno słowo: np. dekoracyjna, odporna, oczyszczająca",
+  "dlaczego": "krótka fraza: dlaczego warto ją mieć w domu"
+}`;
+
+    const aiResponse = await model.generateContent(prompt);
+    let aiData;
+
+    try {
+      const text = aiResponse.response.text().trim();
+      aiData = JSON.parse(text);
+    } catch (parseError) {
+      console.error(
+        "Błąd parsowania JSON z Gemini:",
+        aiResponse.response.text()
+      );
+      throw new Error("Niepoprawna odpowiedź AI");
+    }
 
     const result = {
-      id: details.id,
-      commonName: details.common_name || "Nieznana roślina",
-      scientificName:
-        details.scientific_name?.[0] ||
-        details.common_name ||
-        "Brak nazwy naukowej",
-      description:
-        details.description || "Piękna roślina doniczkowa, idealna do wnętrz.",
-      cycle: details.cycle || "Nieznany",
-      watering: details.watering || "Umiarkowane",
-      sunlight: details.sunlight?.join(", ") || "Jasne, rozproszone",
-      origin: details.origin?.join(", ") || "Nieznane pochodzenie",
-      indoor: details.indoor ? "Tak" : "Nie",
-      careLevel: details.care_level || "Średni",
+      id: d.id,
+      commonName: d.common_name || "Nieznana roślina",
+      scientificName: d.scientific_name?.[0] || d.common_name || "—",
+      description: aiData.opis || FALLBACK_PLANT.description,
+      watering: safeEnum(
+        aiData.podlewanie,
+        ["BARDZO_RZADKIE", "RZADKIE", "UMIARKOWANE", "CZĘSTE"],
+        "UMIARKOWANE"
+      ),
+      sunlight: safeEnum(
+        aiData.swiatlo,
+        ["CIEŃ", "PÓŁCIEŃ", "ROZPROSZONE", "JASNE", "PEŁNE_SŁOŃCE"],
+        "PÓŁCIEŃ"
+      ),
+      origin: aiData.pochodzenie || "Nieznane",
+      indoor: "TAK",
+      careLevel: safeEnum(
+        aiData.poziom_opieki,
+        ["BARDZO_ŁATWY", "ŁATWY", "ŚREDNI", "TRUDNY"],
+        "ŁATWY"
+      ),
+      specialFeature: aiData.cecha_specjalna || "dekoracyjna",
+      why: aiData.dlaczego || "doda zieleni do wnętrza",
       imageUrl:
-        details.default_image?.original_url ||
-        details.default_image?.regular_url ||
-        "https://via.placeholder.com/600x800?text=Roślina",
-      thumbnailUrl:
-        details.default_image?.thumbnail || details.default_image?.medium_url,
+        d.default_image?.original_url ||
+        d.default_image?.regular_url ||
+        d.default_image?.medium_url ||
+        FALLBACK_PLANT.imageUrl,
     };
+
+    cachedPlant = result;
+    cacheTimestamp = Date.now();
 
     res.json(result);
   } catch (error) {
-    console.error("Błąd Perenual API:", error.message);
-    res.json({
-      id: 999,
-      commonName: "Monstera deliciosa",
-      scientificName: "Monstera deliciosa",
-      description:
-        "Ikona roślin domowych! Jej charakterystyczne dziury w liściach powstają naturalnie, gdy roślina dojrzewa. Oczyszcza powietrze i dodaje tropikalnego klimatu do każdego wnętrza.",
-      cycle: "Wieloletnia",
-      watering: "Umiarkowane",
-      sunlight: "Jasne, rozproszone",
-      origin: "Ameryka Środkowa i Południowa",
-      indoor: "Tak",
-      careLevel: "Łatwy",
-      imageUrl:
-        "https://perenual.com/storage/species_image/1_monstera_deliciosa/large.jpg",
-    });
+    console.error("❌ /funfact błąd:", error.message);
+    res.json(FALLBACK_PLANT);
   }
 });
 
