@@ -432,15 +432,27 @@ Zwróć TYLKO czysty JSON (bez komentarzy, bez markdown):
       messages: [
         {
           role: "user",
-          content: [{ type: "text", text: prompt }],
+          content: prompt,
         },
       ],
+      temperature: 0.6,
+      max_tokens: 220,
+      response_format: { type: "json_object" },
     });
 
     let aiData = {};
     try {
-      const text = completion.choices[0].message.content[0].text.trim();
-      aiData = JSON.parse(text);
+      const rawContent = completion.choices[0].message.content;
+
+      if (!rawContent) {
+        throw new Error("Pusta odpowiedź od AI");
+      }
+      const cleanJson = rawContent
+        .replace(/```json/g, "")
+        .replace(/```/g, "")
+        .trim();
+
+      aiData = JSON.parse(cleanJson);
     } catch (parseError) {
       console.error("Błąd parsowania JSON z Gemini:", parseError);
     }
