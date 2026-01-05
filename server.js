@@ -396,7 +396,6 @@ const FALLBACK_PLANT = {
   imageUrl:
     "https://perenual.com/storage/species_image/1_monstera_deliciosa/large.jpg",
 };
-
 app.get("/funfact", async (req, res) => {
   try {
     if (cachedPlant && Date.now() - cacheTimestamp < CACHE_TTL) {
@@ -414,25 +413,17 @@ app.get("/funfact", async (req, res) => {
     });
 
     const plants = listRes.data?.data;
-    if (!plants || plants.length === 0)
+    if (!plants || plants.length === 0) {
       throw new Error("Brak roślin na stronie");
+    }
 
-    const randomPlant = plants[Math.floor(Math.random() * plants.length)];
-
-    const detailsRes = await axios.get(
-      `https://perenual.com/api/species/details/${randomPlant.id}`,
-      {
-        params: { key: process.env.PERENUAL_API_KEY },
-        timeout: 10000,
-      }
-    );
-    const d = detailsRes.data;
+    const p = plants[Math.floor(Math.random() * plants.length)];
 
     const prompt = `Jesteś polskim ekspertem od roślin doniczkowych.
 
-Roślina:
-- nazwa angielska: "${d.common_name || "nieznana"}"
-- nazwa łacińska: "${d.scientific_name?.[0] || "nieznana"}"
+Na podstawie nazwy rośliny:
+- angielska: "${p.common_name || "nieznana"}"
+- łacińska: "${p.scientific_name?.[0] || "nieznana"}"
 
 Zwróć TYLKO czysty JSON (bez komentarzy, bez markdown):
 
@@ -440,7 +431,7 @@ Zwróć TYLKO czysty JSON (bez komentarzy, bez markdown):
   "opis": "2-3 zdania po polsku: przyjazny, ekspercki, angażujący ton",
   "podlewanie": "BARDZO_RZADKIE | RZADKIE | UMIARKOWANE | CZĘSTE",
   "swiatlo": "CIEŃ | PÓŁCIEŃ | ROZPROSZONE | JASNE | PEŁNE_SŁOŃCE",
-  "pochodzenie": "region lub kontynent",
+  "pochodzenie": "region lub kontynent pochodzenia",
   "poziom_opieki": "BARDZO_ŁATWY | ŁATWY | ŚREDNI | TRUDNY",
   "cecha_specjalna": "jedno słowo: np. dekoracyjna, odporna, oczyszczająca",
   "dlaczego": "krótka fraza: dlaczego warto ją mieć w domu"
@@ -457,40 +448,30 @@ Zwróć TYLKO czysty JSON (bez komentarzy, bez markdown):
         "Błąd parsowania JSON z Gemini:",
         aiResponse.response.text()
       );
-      throw new Error("Niepoprawna odpowiedź AI");
+      aiData = {};
     }
 
+    const imageUrl =
+      p.default_image?.original_url ||
+      p.default_image?.regular_url ||
+      p.default_image?.medium_url ||
+      p.default_image?.thumbnail ||
+      FALLBACK_PLANT.imageUrl;
+
     const result = {
-      id: d.id,
-      commonName: d.common_name || "Nieznana roślina",
-      scientificName: d.scientific_name?.[0] || d.common_name || "—",
-      description: aiData.opis || FALLBACK_PLANT.description,
-      watering: safeEnum(
-        aiData.podlewanie,
-        ["BARDZO_RZADKIE", "RZADKIE", "UMIARKOWANE", "CZĘSTE"],
-        "UMIARKOWANE"
-      ),
-      sunlight: safeEnum(
-        aiData.swiatlo,
-        ["CIEŃ", "PÓŁCIEŃ", "ROZPROSZONE", "JASNE", "PEŁNE_SŁOŃCE"],
-        "PÓŁCIEŃ"
-      ),
+      id: p.id,
+      commonName: p.common_name || "Nieznana roślina",
+      scientificName: p.scientific_name?.[0] || "",
+      description: aiData.opis || "Piękna roślina doniczkowa.",
+      watering: aiData.podlewanie || "UMIARKOWANE",
+      sunlight: aiData.swiatlo || "PÓŁCIEŃ",
       origin: aiData.pochodzenie || "Nieznane",
       indoor: "TAK",
-      careLevel: safeEnum(
-        aiData.poziom_opieki,
-        ["BARDZO_ŁATWY", "ŁATWY", "ŚREDNI", "TRUDNY"],
-        "ŁATWY"
-      ),
+      careLevel: aiData.poziom_opieki || "ŁATWY",
       specialFeature: aiData.cecha_specjalna || "dekoracyjna",
       why: aiData.dlaczego || "doda zieleni do wnętrza",
-      imageUrl:
-        d.default_image?.original_url ||
-        d.default_image?.regular_url ||
-        d.default_image?.medium_url ||
-        FALLBACK_PLANT.imageUrl,
+      imageUrl: imageUrl,
     };
-
     cachedPlant = result;
     cacheTimestamp = Date.now();
 
