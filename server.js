@@ -321,14 +321,19 @@ app.post("/plants/:id/water", verifyToken, async (req, res) => {
     if (!doc.exists || doc.data().userId !== req.userId) {
       return res.status(404).json({ error: "Roślina nie znaleziona" });
     }
+    const now = new Date();
+
     await plantRef.update({
-      wateringHistory: admin.firestore.FieldValue.arrayUnion(
-        admin.firestore.FieldValue.serverTimestamp()
-      ),
-      lastWatered: admin.firestore.FieldValue.serverTimestamp(),
+      lastWatered: now,
+      wateringHistory: admin.firestore.FieldValue.arrayUnion(now),
     });
-    res.json({ success: true });
+
+    res.json({
+      success: true,
+      lastWatered: now,
+    });
   } catch (error) {
+    console.error("Water error:", error);
     res.status(500).json({ error: "Błąd serwera" });
   }
 });
@@ -340,11 +345,17 @@ app.post("/plants/:id/fertilize", verifyToken, async (req, res) => {
     if (!doc.exists || doc.data().userId !== req.userId) {
       return res.status(404).json({ error: "Roślina nie znaleziona" });
     }
+    const now = new Date();
+
     await plantRef.update({
-      lastFertilized: admin.firestore.FieldValue.serverTimestamp(),
+      lastFertilized: now,
     });
-    res.json({ success: true });
+    res.json({
+      success: true,
+      lastFertilized: now,
+    });
   } catch (error) {
+    console.error("Fertilize error:", error);
     res.status(500).json({ error: "Błąd serwera" });
   }
 });
