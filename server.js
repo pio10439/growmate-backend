@@ -539,19 +539,15 @@ Na podstawie zdjęcia rozpoznaj roślinę i zwróć TYLKO czysty JSON (bez markd
 }`;
 
       const completion = await openai.chat.completions.create({
-        model: "google/gemma-3-4b-it:free",
+        model: "qwen/qwen-2.5-vl-7b-instruct:free",
         messages: [
           {
             role: "user",
-            content: [
-              { type: "text", text: prompt },
-              { type: "image_url", image_url: { url: publicUrl } },
-            ],
+            content: `${prompt}\nZdjęcie do rozpoznania: ${publicUrl}`,
           },
         ],
         temperature: 0.4,
         max_tokens: 300,
-        response_format: { type: "json_object" },
       });
 
       let aiData = {};
