@@ -470,7 +470,7 @@ Zwróć TYLKO czysty JSON (bez komentarzy, bez markdown):
 
       aiData = JSON.parse(cleanJson);
     } catch (parseError) {
-      console.error("Błąd parsowania JSON z Gemini:", parseError);
+      console.error("Błąd parsowania JSON z AI:", parseError);
     }
 
     const imageUrl =
@@ -503,7 +503,6 @@ Zwróć TYLKO czysty JSON (bez komentarzy, bez markdown):
     res.json(FALLBACK_PLANT);
   }
 });
-
 app.post(
   "/identify-plant",
   verifyToken,
@@ -518,60 +517,75 @@ app.post(
       const imageBase64 = fs.readFileSync(req.file.path, {
         encoding: "base64",
       });
+      const imageDataUrl = `data:${req.file.mimetype};base64,${imageBase64}`;
 
-      const response = await axios.post(
-        "https://api.plant.id/v2/identify",
-        {
-          images: [`data:${req.file.mimetype};base64,${imageBase64}`],
-          plant_details: [
-            "common_names",
-            "url",
-            "wiki_description",
-            "taxonomy",
-            "synonyms",
-            "watering",
-            "sunlight",
-          ],
-          language: "pl",
-        },
-        {
-          headers: {
-            "Api-Key": process.env.PLANT_ID_API_KEY,
-            "Content-Type": "application/json",
+      const prompt = `Jesteś polskim ekspertem od roślin doniczkowych.
+
+Na podstawie zdjęcia rozpoznaj roślinę i zwróć TYLKO czysty JSON (bez markdown, bez komentarzy):
+
+{
+  "name": "nazwa rośliny po polsku (jeśli znana) lub angielsku",
+  "type": "Gatunek lub rodzina (np. Sukulent, Paproć)",
+  "probability": "pewność w procentach (np. 85)",
+  "wateringDays": "liczba dni co ile podlewać (np. 7, 10, 14, 21, 30)",
+  "fertilizingDays": "liczba dni co ile nawozić (np. 30, 60, 90)",
+  "lightLevel": "poziom światła po polsku (np. Dużo rozproszonego światła, Półcień, Cień, Jasne światło)",
+  "temperature": "preferowana temperatura (np. 18-24°C)",
+  "notes": "krótkie dodatkowe wskazówki (opcjonalne, max 1 zdanie)"
+}`;
+
+      const completion = await openai.chat.completions.create({
+        model: "google/gemma-3-4b-it:free",
+        messages: [
+          {
+            role: "user",
+            content: [
+              { type: "text", text: prompt },
+              { type: "image_url", image_url: { url: imageDataUrl } },
+            ],
           },
-        }
-      );
+        ],
+        temperature: 0.4,
+        max_tokens: 300,
+        response_format: { type: "json_object" },
+      });
 
-      const suggestions = response.data.suggestions || [];
-      if (suggestions.length === 0) {
-        fs.unlinkSync(req.file.path);
-        return res.json({ error: "Nie udało się rozpoznać rośliny" });
+      let aiData = {};
+      try {
+        const raw = completion.choices[0].message.content.trim();
+        let clean = raw;
+        if (clean.startsWith("```json")) clean = clean.slice(7);
+        if (clean.endsWith("```")) clean = clean.slice(0, -3);
+        aiData = JSON.parse(clean.trim());
+      } catch (e) {
+        console.error(
+          "Błąd parsowania JSON z AI:",
+          completion.choices[0].message.content
+        );
+        aiData = {};
       }
 
-      const best = suggestions[0];
-      const plant = best.plant_details;
-
       const result = {
-        name: best.plant_name,
-        commonNames: plant.common_names || [],
-        probability: Math.round(best.probability * 100),
-        description: plant.wiki_description?.value || "Brak opisu",
-        watering: plant.watering?.general || "Brak danych",
-        sunlight: plant.sunlight || ["Średnie światło"],
-        imageUrl: best.images?.[0]?.url || null,
+        name: aiData.name || "Nieznana roślina",
+        commonNames: Array.isArray(aiData.commonNames)
+          ? aiData.commonNames
+          : [],
+        probability: aiData.probability || 70,
+        description: aiData.description || "Piękna roślina doniczkowa.",
+        wateringDays: aiData.wateringDays || "7",
+        fertilizingDays: aiData.fertilizingDays || "30",
+        lightLevel: aiData.lightLevel || "Rozproszone światło",
+        temperature: aiData.temperature || "18-24°C",
+        notes: aiData.notes || "",
       };
 
       fs.unlinkSync(req.file.path);
       res.json(result);
     } catch (error) {
-      console.error(
-        "Błąd identyfikacji rośliny:",
-        error.response?.data || error.message
-      );
-      if (req.file && fs.existsSync(req.file.path)) {
+      console.error("Błąd AI:", error.message);
+      if (req.file && fs.existsSync(req.file.path))
         fs.unlinkSync(req.file.path);
-      }
-      res.status(500).json({ error: "Błąd podczas rozpoznawania rośliny" });
+      res.status(500).json({ error: "Błąd rozpoznawania" });
     }
   }
 );
