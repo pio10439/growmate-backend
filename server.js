@@ -539,7 +539,7 @@ Na podstawie zdjęcia rozpoznaj roślinę i zwróć TYLKO czysty JSON (bez markd
 }`;
 
       const completion = await openai.chat.completions.create({
-        model: "bytedance-seed/seedream-4.5",
+        model: "nvidia/nemotron-nano-12b-v2-vl:free",
         messages: [
           {
             role: "user",
