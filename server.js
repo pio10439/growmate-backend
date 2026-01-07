@@ -545,7 +545,7 @@ Na podstawie zdjęcia rozpoznaj roślinę i zwróć TYLKO czysty JSON (bez markd
             role: "user",
             content: [
               { type: "text", text: prompt },
-              { type: "image_url", image_url: { url: imageDataUrl } },
+              { type: "image_url", image_url: { url: publicUrl } },
             ],
           },
         ],
