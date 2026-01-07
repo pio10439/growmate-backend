@@ -509,15 +509,19 @@ app.post(
   identifyLimiter,
   upload.single("photo"),
   async (req, res) => {
+    let tempPublicId = null;
     try {
       if (!req.file) {
         return res.status(400).json({ error: "Brak zdjęcia" });
       }
 
-      const imageBase64 = fs.readFileSync(req.file.path, {
-        encoding: "base64",
+      const uploadResult = await cloudinary.uploader.upload(req.file.path, {
+        folder: "growmate/temp_ai",
+        resource_type: "image",
       });
-      const imageDataUrl = `data:${req.file.mimetype};base64,${imageBase64}`;
+
+      tempPublicId = uploadResult.public_id;
+      const publicUrl = uploadResult.secure_url;
 
       const prompt = `Jesteś polskim ekspertem od roślin doniczkowych.
 
@@ -579,13 +583,24 @@ Na podstawie zdjęcia rozpoznaj roślinę i zwróć TYLKO czysty JSON (bez markd
         notes: aiData.notes || "",
       };
 
-      fs.unlinkSync(req.file.path);
       res.json(result);
     } catch (error) {
       console.error("Błąd AI:", error.message);
-      if (req.file && fs.existsSync(req.file.path))
+      res.status(500).json({ error: "Błąd podczas rozpoznawania rośliny" });
+    } finally {
+      if (tempPublicId) {
+        try {
+          await cloudinary.uploader.destroy(tempPublicId);
+        } catch (cleanupError) {
+          console.warn(
+            "Nie udało się usunąć tymczasowego zdjęcia:",
+            cleanupError.message
+          );
+        }
+      }
+      if (req.file && fs.existsSync(req.file.path)) {
         fs.unlinkSync(req.file.path);
-      res.status(500).json({ error: "Błąd rozpoznawania" });
+      }
     }
   }
 );
