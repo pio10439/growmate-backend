@@ -503,9 +503,6 @@ Zwróć TYLKO czysty JSON (bez komentarzy, bez markdown):
     res.json(FALLBACK_PLANT);
   }
 });
-import fs from "fs";
-import axios from "axios";
-
 app.post(
   "/identify-plant",
   verifyToken,
