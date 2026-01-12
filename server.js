@@ -556,7 +556,7 @@ Zwróć TYLKO czysty JSON (bez markdown, bez komentarzy):
 
 {
   "name": "najlepsza polska nazwa rośliny (lub angielska jeśli nie ma polskiej)",
-  "type": "rodzaj / grupa (np. Sukulent, Paproć)",
+  "type": "rodzine / rodzaj podanej rosliny (np. Rodzina kaktusowata, Sukulent)",
   "wateringDays": "co ile dni podlewać (np. 7, 10, 14, 21)",
   "fertilizingDays": "co ile dni nawozić (np. 30, 60)",
   "lightLevel": "poziom światła po polsku",
@@ -586,6 +586,11 @@ Zwróć TYLKO czysty JSON (bez markdown, bez komentarzy):
       } catch (e) {
         console.error("Błąd parsowania AI:", e.message);
       }
+      const cleanTemp = (aiData.temperature || "18-24")
+        .toString()
+        .replace(/\s+/g, "")
+        .replace(/–/g, "-")
+        .replace(/[^\d-]/g, "");
       res.json({
         name: aiData.name || plantName,
         type: aiData.type || "Roślina doniczkowa",
@@ -593,7 +598,7 @@ Zwróć TYLKO czysty JSON (bez markdown, bez komentarzy):
         wateringDays: aiData.wateringDays || "7",
         fertilizingDays: aiData.fertilizingDays || "30",
         lightLevel: aiData.lightLevel || "Rozproszone światło",
-        temperature: aiData.temperature || "18–24",
+        temperature: cleanTemp || "18–24",
         notes: aiData.notes || "",
         photoUrl,
       });
