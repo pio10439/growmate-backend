@@ -509,25 +509,26 @@ app.post(
   identifyLimiter,
   upload.single("photo"),
   async (req, res) => {
-    let tempPublicId = null;
-
     try {
       if (!req.file) {
         return res.status(400).json({ error: "Brak zdjęcia" });
       }
 
       const uploadResult = await cloudinary.uploader.upload(req.file.path, {
-        folder: "growmate/temp_ai",
+        folder: "growmate/plants",
         resource_type: "image",
       });
 
-      tempPublicId = uploadResult.public_id;
-      const publicUrl = uploadResult.secure_url;
+      const photoUrl = uploadResult.secure_url;
+
+      const imageBase64 = fs.readFileSync(req.file.path, {
+        encoding: "base64",
+      });
 
       const plantIdResponse = await axios.post(
-        "https://api.plant.id/v3/identification",
+        "https://plant.id/api/v3/identification",
         {
-          images: [publicUrl],
+          images: [`data:${req.file.mimetype};base64,${imageBase64}`],
           details: [],
           language: "en",
         },
@@ -598,17 +599,12 @@ Zwróć TYLKO czysty JSON (bez markdown, bez komentarzy):
         lightLevel: aiData.lightLevel || "Rozproszone światło",
         temperature: aiData.temperature || "18–24",
         notes: aiData.notes || "",
+        photoUrl,
       });
     } catch (error) {
       console.error("Błąd identyfikacji:", error.message);
       res.status(500).json({ error: "Nie udało się rozpoznać rośliny" });
     } finally {
-      if (tempPublicId) {
-        try {
-          await cloudinary.uploader.destroy(tempPublicId);
-        } catch {}
-      }
-
       if (req.file && fs.existsSync(req.file.path)) {
         fs.unlinkSync(req.file.path);
       }
