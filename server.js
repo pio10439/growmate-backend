@@ -514,96 +514,54 @@ app.post(
         return res.status(400).json({ error: "Brak zdjęcia" });
       }
 
-      const uploadResult = await cloudinary.uploader.upload(req.file.path, {
-        folder: "growmate/plants",
-        resource_type: "image",
-      });
-
-      const photoUrl = uploadResult.secure_url;
+      console.log("--- Start identyfikacji ---");
 
       const imageBase64 = fs.readFileSync(req.file.path, {
         encoding: "base64",
       });
-
       const plantIdResponse = await axios.post(
         "https://plant.id/api/v3/identification",
         {
-          images: [`data:${req.file.mimetype};base64,${imageBase64}`],
-          details: [],
-          language: "en",
+          images: [imageBase64],
         },
         {
           headers: {
             "Api-Key": process.env.PLANT_ID_API_KEY,
             "Content-Type": "application/json",
           },
-          timeout: 20000,
         }
+      );
+
+      console.log(
+        "ODPOWIEDŹ Z PLANT.ID:",
+        JSON.stringify(plantIdResponse.data, null, 2)
       );
 
       const suggestions =
         plantIdResponse.data?.result?.classification?.suggestions;
 
       if (!suggestions || suggestions.length === 0) {
-        throw new Error("Plant.id nie rozpoznało rośliny");
+        console.log("Nie znaleziono sugestii.");
+        return res.json({ message: "Nie rozpoznano rośliny" });
       }
 
-      const plantName = suggestions[0].name;
-
-      const prompt = `
-Jesteś polskim ekspertem od roślin doniczkowych.
-
-Rozpoznana roślina: "${plantName}"
-
-Zwróć TYLKO czysty JSON (bez markdown, bez komentarzy):
-
-{
-  "name": "najlepsza polska nazwa rośliny (lub angielska jeśli nie ma polskiej)",
-  "type": "rodzaj / grupa (np. Sukulent, Paproć)",
-  "wateringDays": "co ile dni podlewać (np. 7, 10, 14, 21)",
-  "fertilizingDays": "co ile dni nawozić (np. 30, 60)",
-  "lightLevel": "poziom światła po polsku",
-  "temperature": "zakres temperatur (np. 18–24°C) podaj sam zakres bez jednostki temperatury",
-  "notes": "krótka praktyczna wskazówka"
-}
-`;
-
-      const completion = await openai.chat.completions.create({
-        model: "mistralai/devstral-2512:free",
-        messages: [
-          {
-            role: "user",
-            content: prompt,
-          },
-        ],
-        temperature: 0.6,
-        max_tokens: 220,
-        response_format: { type: "json_object" },
-      });
-
-      let aiData = {};
-      try {
-        let raw = completion.choices[0].message.content.trim();
-        if (raw.startsWith("```")) raw = raw.replace(/```json|```/g, "");
-        aiData = JSON.parse(raw);
-      } catch (e) {
-        console.error("Błąd parsowania AI:", e.message);
-      }
+      const bestMatch = suggestions[0];
+      console.log(
+        `Rozpoznano: ${bestMatch.name} (Pewność: ${bestMatch.probability})`
+      );
 
       res.json({
-        name: aiData.name || plantName,
-        type: aiData.type || "Roślina doniczkowa",
-        probability: Math.round(suggestions[0].probability * 100) || "80",
-        wateringDays: aiData.wateringDays || "7",
-        fertilizingDays: aiData.fertilizingDays || "30",
-        lightLevel: aiData.lightLevel || "Rozproszone światło",
-        temperature: aiData.temperature || "18–24",
-        notes: aiData.notes || "",
-        photoUrl,
+        success: true,
+        name: bestMatch.name,
+        probability: bestMatch.probability,
       });
     } catch (error) {
-      console.error("Błąd identyfikacji:", error.message);
-      res.status(500).json({ error: "Nie udało się rozpoznać rośliny" });
+      if (error.response) {
+        console.error("Błąd z serwera Plant.id:", error.response.data);
+      } else {
+        console.error("Błąd połączenia:", error.message);
+      }
+      res.status(500).json({ error: "Błąd serwera podczas testu" });
     } finally {
       if (req.file && fs.existsSync(req.file.path)) {
         fs.unlinkSync(req.file.path);
