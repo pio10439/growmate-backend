@@ -191,6 +191,29 @@ app.get("/plants", verifyToken, async (req, res) => {
   }
 });
 
+app.get("/user-info", verifyToken, async (req, res) => {
+  try {
+    const userId = req.userId;
+
+    const userRecord = await admin.auth().getUser(userId);
+    const createdAt = userRecord.metadata.creationTime;
+
+    const plantsSnapshot = await db
+      .collection("plants")
+      .where("userId", "==", userId)
+      .get();
+    const plantCount = plantsSnapshot.size;
+
+    res.json({
+      joinedAt: createdAt,
+      plantCount: plantCount,
+    });
+  } catch (error) {
+    console.error("Błąd /user-info:", error);
+    res.status(500).json({ error: "Błąd serwera" });
+  }
+});
+
 app.put(
   "/plants/:id",
   verifyToken,
@@ -556,7 +579,7 @@ Zwróć TYLKO czysty JSON (bez markdown, bez komentarzy):
 
 {
   "name": "najlepsza polska nazwa rośliny (lub angielska jeśli nie ma polskiej)",
-  "type": "rodzine / rodzaj podanej rosliny (np. Rodzina kaktusowata, Sukulent)",
+  "type": "do jakiej rodziny roslin nalezy (np. Rodzina kaktusowata, rodzina strelicjowata)",
   "wateringDays": "co ile dni podlewać (np. 7, 10, 14, 21)",
   "fertilizingDays": "co ile dni nawozić (np. 30, 60)",
   "lightLevel": "poziom światła po polsku",
