@@ -9,6 +9,8 @@ const fs = require("fs");
 const rateLimit = require("express-rate-limit");
 const { ipKeyGenerator } = require("express-rate-limit");
 
+import { OpenRouter } from "@openrouter/sdk";
+
 const app = express();
 const upload = multer({ dest: "uploads/" });
 
@@ -247,7 +249,7 @@ app.put(
       if (updates.location !== undefined) {
         updateData.location = safeJsonParse(
           updates.location,
-          doc.data().location
+          doc.data().location,
         );
       }
       if (updates.wateringDays !== undefined) {
@@ -292,7 +294,7 @@ app.put(
       console.error("Błąd edycji:", error);
       res.status(500).json({ error: "Błąd serwera" });
     }
-  }
+  },
 );
 
 app.get("/plants/:id", verifyToken, async (req, res) => {
@@ -390,7 +392,7 @@ app.get("/weather/:lat/:lng", weatherLimiter, async (req, res) => {
       return res.status(400).json({ error: "Nieprawidłowe współrzędne" });
     }
     const response = await axios.get(
-      `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lng}&appid=${process.env.OPENWEATHER_API_KEY}&units=metric&lang=pl`
+      `https://api.openweathermap.org/data/2.5/forecast?lat=${lat}&lon=${lng}&appid=${process.env.OPENWEATHER_API_KEY}&units=metric&lang=pl`,
     );
     res.json(response.data);
   } catch (error) {
@@ -398,8 +400,7 @@ app.get("/weather/:lat/:lng", weatherLimiter, async (req, res) => {
   }
 });
 
-const openai = new OpenAI({
-  baseURL: "https://openrouter.ai/api/v1",
+const openai = new OpenRouter({
   apiKey: process.env.OPENROUTER_API_KEY,
 });
 
@@ -466,8 +467,8 @@ Zwróć TYLKO czysty JSON (bez komentarzy, bez markdown):
   "dlaczego": "krótka fraza: dlaczego warto ją mieć w domu"
 }`;
 
-    const completion = await openai.chat.completions.create({
-      model: "mistralai/devstral-2512:free",
+    const completion = await openai.chat.send({
+      model: "nvidia/nemotron-3-super-120b-a12b:free",
       messages: [
         {
           role: "user",
@@ -476,12 +477,11 @@ Zwróć TYLKO czysty JSON (bez komentarzy, bez markdown):
       ],
       temperature: 0.6,
       max_tokens: 220,
-      response_format: { type: "json_object" },
     });
 
     let aiData = {};
     try {
-      const rawContent = completion.choices[0].message.content;
+      const rawContent = completion.choices?.[0]?.message?.content;
 
       if (!rawContent) {
         throw new Error("Pusta odpowiedź od AI");
@@ -557,7 +557,7 @@ app.post(
             "Api-Key": process.env.PLANT_ID_API_KEY,
             "Content-Type": "application/json",
           },
-        }
+        },
       );
 
       const suggestions =
@@ -588,17 +588,16 @@ Zwróć TYLKO czysty JSON (bez markdown, bez komentarzy):
 }
 `;
 
-      const completion = await openai.chat.completions.create({
-        model: "mistralai/devstral-2512:free",
+      const completion = await openai.chat.send({
+        model: "nvidia/nemotron-3-super-120b-a12b:free",
         messages: [
           {
             role: "user",
             content: prompt,
           },
         ],
-        temperature: 0.4,
+        temperature: 0.6,
         max_tokens: 220,
-        response_format: { type: "json_object" },
       });
 
       let aiData = {};
@@ -637,7 +636,7 @@ Zwróć TYLKO czysty JSON (bez markdown, bez komentarzy):
         fs.unlinkSync(req.file.path);
       }
     }
-  }
+  },
 );
 
 app.get("/", (req, res) => {
