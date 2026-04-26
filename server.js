@@ -556,10 +556,10 @@ Na podstawie zdjęcia rozpoznaj roślinę i zwróć TYLKO czysty JSON (bez markd
   "name": "nazwa rośliny po polsku (jeśli znana) lub angielsku",
   "type": "Gatunek lub rodzina (np. Sukulent, Paproć)",
   "probability": "pewność w procentach (np. 85)",
-  "wateringDays": "liczba dni co ile podlewać (np. 7, 10, 14, 21, 30)",
-  "fertilizingDays": "liczba dni co ile nawozić (np. 30, 60, 90)",
+  "wateringDays": "liczba dni co ile podlewać (np. 7)",
+  "fertilizingDays": "liczba dni co ile nawozić (np. 30)",
   "lightLevel": "poziom światła po polsku (np. Dużo rozproszonego światła, Półcień, Cień, Jasne światło)",
-  "temperature": "preferowana temperatura (np. 18-24°C)",
+  "temperature": "preferowana temperatura (np. 18-24°C), podaj bez jednostki",
   "notes": "krótkie dodatkowe wskazówki (opcjonalne, max 1 zdanie)"
 }`;
 
@@ -601,7 +601,7 @@ Na podstawie zdjęcia rozpoznaj roślinę i zwróć TYLKO czysty JSON (bez markd
         wateringDays: aiData.wateringDays || "7",
         fertilizingDays: aiData.fertilizingDays || "30",
         lightLevel: aiData.lightLevel || "Rozproszone światło",
-        temperature: aiData.temperature || "18-24°C",
+        temperature: aiData.temperature || "18-24",
         notes: aiData.notes || "",
       };
 
