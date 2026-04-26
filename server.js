@@ -469,7 +469,7 @@ Zwróć TYLKO czysty JSON (bez komentarzy, bez markdown):
 }`;
 
     const completion = await openai.chat.completions.create({
-      model: "google/gemma-3-27b-it:free",
+      model: "minimax/minimax-m2.5:free",
       messages: [
         {
           role: "user",
