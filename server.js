@@ -564,7 +564,9 @@ Na podstawie zdjęcia rozpoznaj roślinę i zwróć TYLKO czysty JSON (bez markd
 }`;
 
       const completion = await openai.chat.completions.create({
-        model: "baidu/qianfan-ocr-fast:free",
+        model: "nvidia/nemotron-nano-12b-v2-vl:free",
+        //"baidu/qianfan-ocr-fast:free",
+
         messages: [
           {
             role: "user",
