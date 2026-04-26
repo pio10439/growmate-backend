@@ -469,7 +469,7 @@ Zwróć TYLKO czysty JSON (bez komentarzy, bez markdown):
 }`;
 
     const completion = await openai.chat.completions.create({
-      model: "minimax/minimax-m2.5:free",
+      model: "nvidia/nemotron-3-super-120b-a12b:free",
       messages: [
         {
           role: "user",
