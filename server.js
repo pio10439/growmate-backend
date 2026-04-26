@@ -400,7 +400,8 @@ app.get("/weather/:lat/:lng", weatherLimiter, async (req, res) => {
   }
 });
 
-const openai = new OpenRouter({
+const openai = new OpenAI({
+  baseURL: "https://openrouter.ai/api/v1",
   apiKey: process.env.OPENROUTER_API_KEY,
 });
 
@@ -467,8 +468,8 @@ Zwróć TYLKO czysty JSON (bez komentarzy, bez markdown):
   "dlaczego": "krótka fraza: dlaczego warto ją mieć w domu"
 }`;
 
-    const completion = await openai.chat.send({
-      model: "nvidia/nemotron-3-super-120b-a12b:free",
+    const completion = await openai.chat.completions.create({
+      model: "google/gemma-3-27b-it:free",
       messages: [
         {
           role: "user",
@@ -477,11 +478,12 @@ Zwróć TYLKO czysty JSON (bez komentarzy, bez markdown):
       ],
       temperature: 0.6,
       max_tokens: 220,
+      response_format: { type: "json_object" },
     });
 
     let aiData = {};
     try {
-      const rawContent = completion.choices?.[0]?.message?.content;
+      const rawContent = completion.choices[0].message.content;
 
       if (!rawContent) {
         throw new Error("Pusta odpowiedź od AI");
@@ -532,106 +534,91 @@ app.post(
   identifyLimiter,
   upload.single("photo"),
   async (req, res) => {
+    let tempPublicId = null;
     try {
       if (!req.file) {
         return res.status(400).json({ error: "Brak zdjęcia" });
       }
-      const imageBase64 = fs.readFileSync(req.file.path, {
-        encoding: "base64",
-      });
 
       const uploadResult = await cloudinary.uploader.upload(req.file.path, {
-        folder: "growmate/plants",
+        folder: "growmate/temp_ai",
         resource_type: "image",
       });
 
-      const photoUrl = uploadResult.secure_url;
+      tempPublicId = uploadResult.public_id;
+      const publicUrl = uploadResult.secure_url;
 
-      const plantIdResponse = await axios.post(
-        "https://plant.id/api/v3/identification",
-        {
-          images: [imageBase64],
-        },
-        {
-          headers: {
-            "Api-Key": process.env.PLANT_ID_API_KEY,
-            "Content-Type": "application/json",
-          },
-        },
-      );
+      const prompt = `Jesteś polskim ekspertem od roślin doniczkowych.
 
-      const suggestions =
-        plantIdResponse.data?.result?.classification?.suggestions;
-
-      if (!suggestions || suggestions.length === 0) {
-        throw new Error("Plant.id nie rozpoznało rośliny");
-      }
-
-      const bestMatch = suggestions[0].probability;
-      const plantName = suggestions[0].name;
-
-      const prompt = `
-Jesteś polskim ekspertem od roślin.
-
-Rozpoznana roślina: "${plantName}"
-
-Zwróć TYLKO czysty JSON (bez markdown, bez komentarzy):
+Na podstawie zdjęcia rozpoznaj roślinę i zwróć TYLKO czysty JSON (bez markdown, bez komentarzy):
 
 {
-  "name": "najlepsza polska nazwa rośliny (lub angielska jeśli nie ma polskiej)",
-  "type": "do jakiej rodziny roslin nalezy (np. Rodzina kaktusowata, rodzina strelicjowata)",
-  "wateringDays": "co ile dni podlewać (np. 7, 10, 14, 21)",
-  "fertilizingDays": "co ile dni nawozić (np. 30, 60)",
-  "lightLevel": "poziom światła po polsku",
-  "temperature": "zakres temperatur (np. 18–24°C) podaj sam zakres bez jednostki temperatury",
-  "notes": "krótka praktyczna wskazówka, 1 lub 2 przydatne zdania"
-}
-`;
+  "name": "nazwa rośliny po polsku (jeśli znana) lub angielsku",
+  "type": "Gatunek lub rodzina (np. Sukulent, Paproć)",
+  "probability": "pewność w procentach (np. 85)",
+  "wateringDays": "liczba dni co ile podlewać (np. 7, 10, 14, 21, 30)",
+  "fertilizingDays": "liczba dni co ile nawozić (np. 30, 60, 90)",
+  "lightLevel": "poziom światła po polsku (np. Dużo rozproszonego światła, Półcień, Cień, Jasne światło)",
+  "temperature": "preferowana temperatura (np. 18-24°C)",
+  "notes": "krótkie dodatkowe wskazówki (opcjonalne, max 1 zdanie)"
+}`;
 
-      const completion = await openai.chat.send({
-        model: "nvidia/nemotron-3-super-120b-a12b:free",
+      const completion = await openai.chat.completions.create({
+        model: "google/gemma-3-27b-it:free",
         messages: [
           {
             role: "user",
-            content: prompt,
+            content: `${prompt}\nZdjęcie do rozpoznania: ${publicUrl}`,
           },
         ],
-        temperature: 0.6,
-        max_tokens: 220,
+        temperature: 0.4,
+        max_tokens: 300,
       });
 
       let aiData = {};
       try {
-        let raw = completion.choices[0].message.content.trim();
-        if (raw.startsWith("```")) raw = raw.replace(/```json|```/g, "");
-        aiData = JSON.parse(raw);
+        const raw = completion.choices[0].message.content.trim();
+        let clean = raw;
+        if (clean.startsWith("```json")) clean = clean.slice(7);
+        if (clean.endsWith("```")) clean = clean.slice(0, -3);
+        aiData = JSON.parse(clean.trim());
       } catch (e) {
-        console.error("Błąd parsowania AI:", e.message);
+        console.error(
+          "Błąd parsowania JSON z AI:",
+          completion.choices[0].message.content,
+        );
+        aiData = {};
       }
-      const cleanTemp = (aiData.temperature || "18-24")
-        .toString()
-        .replace(/\s+/g, "")
-        .replace(/–/g, "-")
-        .replace(/[^\d-]/g, "");
-      res.json({
-        name: aiData.name || plantName,
-        type: aiData.type || "Roślina doniczkowa",
-        probability: Math.round(bestMatch * 100) || "80",
+
+      const result = {
+        name: aiData.name || "Nieznana roślina",
+        commonNames: Array.isArray(aiData.commonNames)
+          ? aiData.commonNames
+          : [],
+        probability: aiData.probability || 70,
+        description: aiData.description || "Piękna roślina doniczkowa.",
         wateringDays: aiData.wateringDays || "7",
         fertilizingDays: aiData.fertilizingDays || "30",
         lightLevel: aiData.lightLevel || "Rozproszone światło",
-        temperature: cleanTemp || "18–24",
+        temperature: aiData.temperature || "18-24°C",
         notes: aiData.notes || "",
-        photoUrl,
-      });
+      };
+
+      res.json(result);
     } catch (error) {
-      if (error.response) {
-        console.error("Błąd z serwera Plant.id:", error.response.data);
-      } else {
-        console.error("Błąd identyfikacji:", error.message);
-      }
-      res.status(500).json({ error: "Błąd serwera podczas testu" });
+      console.error("Błąd AI:", error.message);
+      res.status(500).json({ error: "Błąd podczas rozpoznawania rośliny" });
     } finally {
+      if (tempPublicId) {
+        try {
+          await cloudinary.uploader.destroy(tempPublicId);
+        } catch (cleanupError) {
+          console.warn(
+            "Nie udało się usunąć tymczasowego zdjęcia:",
+            cleanupError.message,
+          );
+        }
+      }
       if (req.file && fs.existsSync(req.file.path)) {
         fs.unlinkSync(req.file.path);
       }
