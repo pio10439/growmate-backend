@@ -9,7 +9,7 @@ const fs = require("fs");
 const rateLimit = require("express-rate-limit");
 const { ipKeyGenerator } = require("express-rate-limit");
 
-import { OpenRouter } from "@openrouter/sdk";
+const { OpenRouter } = require("@openrouter/sdk");
 
 const app = express();
 const upload = multer({ dest: "uploads/" });
