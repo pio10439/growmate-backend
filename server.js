@@ -631,7 +631,11 @@ app.get("/", (req, res) => {
   res.send("GrowMate Backend ");
 });
 
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`Backend działa na porcie ${PORT}`);
-});
+module.exports = app;
+
+if (require.main === module) {
+  const PORT = process.env.PORT || 3000;
+  app.listen(PORT, () => {
+    console.log(`Backend działa na porcie ${PORT}`);
+  });
+}
