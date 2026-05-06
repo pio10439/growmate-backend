@@ -563,7 +563,7 @@ Na podstawie zdjęcia rozpoznaj roślinę i zwróć TYLKO czysty JSON (bez markd
   "notes": "krótkie dodatkowe wskazówki (opcjonalne, max 1 zdanie)"
 }`;
       const completion = await openai.chat.completions.create({
-        model: "meta-llama/llama-3.2-11b-vision-instruct:free",
+        model: "google/gemma-4-31b-it:free",
         messages: [
           {
             role: "user",
