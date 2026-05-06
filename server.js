@@ -562,20 +562,41 @@ Na podstawie zdjęcia rozpoznaj roślinę i zwróć TYLKO czysty JSON (bez markd
   "temperature": "preferowana temperatura (np. 18-24°C), podaj bez jednostki",
   "notes": "krótkie dodatkowe wskazówki (opcjonalne, max 1 zdanie)"
 }`;
-
       const completion = await openai.chat.completions.create({
-        model: "google/gemini-pro-1.5-exp:free",
-        // "baidu/qianfan-ocr-fast:free",
-
+        model: "google/gemini-flash-1.5:free",
         messages: [
           {
             role: "user",
-            content: `${prompt}\nZdjęcie do rozpoznania: ${publicUrl}`,
+            content: [
+              {
+                type: "text",
+                text: `${prompt}\nZwróć odpowiedź wyłącznie w formacie JSON.`,
+              },
+              {
+                type: "image_url",
+                image_url: {
+                  url: publicUrl,
+                },
+              },
+            ],
           },
         ],
-        temperature: 0.4,
-        max_tokens: 300,
+        temperature: 0.1, // Niższa temperatura = mniejsze ryzyko błędów w JSON
+        max_tokens: 500,
       });
+      // const completion = await openai.chat.completions.create({
+      //   model: "google/gemini-pro-1.5-exp:free",
+      //   // "baidu/qianfan-ocr-fast:free",
+
+      //   messages: [
+      //     {
+      //       role: "user",
+      //       content: `${prompt}\nZdjęcie do rozpoznania: ${publicUrl}`,
+      //     },
+      //   ],
+      //   temperature: 0.4,
+      //   max_tokens: 300,
+      // });
 
       let aiData = {};
       try {
