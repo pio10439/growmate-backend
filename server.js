@@ -581,22 +581,9 @@ Na podstawie zdjęcia rozpoznaj roślinę i zwróć TYLKO czysty JSON (bez markd
             ],
           },
         ],
-        temperature: 0.1, // Niższa temperatura = mniejsze ryzyko błędów w JSON
+        temperature: 0.3,
         max_tokens: 500,
       });
-      // const completion = await openai.chat.completions.create({
-      //   model: "google/gemini-pro-1.5-exp:free",
-      //   // "baidu/qianfan-ocr-fast:free",
-
-      //   messages: [
-      //     {
-      //       role: "user",
-      //       content: `${prompt}\nZdjęcie do rozpoznania: ${publicUrl}`,
-      //     },
-      //   ],
-      //   temperature: 0.4,
-      //   max_tokens: 300,
-      // });
 
       let aiData = {};
       try {
