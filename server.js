@@ -563,7 +563,7 @@ Na podstawie zdjęcia rozpoznaj roślinę i zwróć TYLKO czysty JSON (bez markd
   "notes": "krótkie dodatkowe wskazówki (opcjonalne, max 1 zdanie)"
 }`;
       const completion = await openai.chat.completions.create({
-        model: "google/gemma-4-31b-it:free",
+        model: "google/gemini-flash-1.5",
         messages: [
           {
             role: "user",
@@ -581,7 +581,7 @@ Na podstawie zdjęcia rozpoznaj roślinę i zwróć TYLKO czysty JSON (bez markd
             ],
           },
         ],
-        temperature: 0.3,
+        temperature: 0.2,
         max_tokens: 500,
       });
 
