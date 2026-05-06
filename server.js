@@ -548,7 +548,7 @@ app.post(
       tempPublicId = uploadResult.public_id;
       const publicUrl = uploadResult.secure_url;
 
-      const prompt = `Jesteś polskim ekspertem od roślin doniczkowych.
+      const prompt = `Jesteś polskim ekspertem od roślin.
 
 Na podstawie zdjęcia rozpoznaj roślinę i zwróć TYLKO czysty JSON (bez markdown, bez komentarzy):
 
